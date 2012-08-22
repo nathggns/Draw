@@ -10,6 +10,7 @@
     "jade": "*",
     "stylus": "*",
     "socket.io": "*",
-    "coffee-script": "*"
+    "coffee-script": "*",
+    "connect-assets": "*"
   }
 }

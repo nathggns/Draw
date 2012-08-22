@@ -1,7 +1,20 @@
+lib =
+  findPos: (ele) ->
+    left = top = 0
+
+    if (ele.offsetParent)
+      loop
+        left += ele.offsetLeft;
+        top += ele.offsetTop;
+        break if not (ele = ele.offsetParent)
+
+    top: top
+    left: left
+
+
 socket = io.connect 'http://localhost:3000'
 
 id = false
-
 
 
 socket.on 'info', (data) ->
@@ -24,24 +37,51 @@ document.addEventListener 'DOMContentLoaded', ->
   if id == false
     return setTimeout arguments.callee, 1
 
+  changeCode = (code) ->
+    id = code
+    $qr.setAttribute 'src', 'http://qr.kaywa.com/img.php?s=8&d=' + code
+    $change.value = code;
+
+    ctx.clearRect $canvas.width, $canvas.height
+
   $qr = $ 'qrcode'
-  $code = $ 'code'
   $change = $ 'change'
-  $qr.setAttribute 'src', 'http://qr.kaywa.com/img.php?s=8&d=' + id
-  $code.innerHTML = ' ' + id
-  $messages = $ 'messages'
+  $canvas = document.createElement 'canvas';
+  $canvas.width = $canvas.height = 300;
+  document.body.appendChild $canvas
+  ctx = $canvas.getContext "2d"
 
-  dataHandlers['message'] = (value) ->
-    li = document.createElement 'li'
-    li.innerHTML = value
-    $messages.appendChild li
+  dataHandlers['draw'] = (point) ->
+    ctx.beginPath()
+    ctx.fillStyle = '#000000'
+    ctx.rect point.left, point.top, 10, 10
+    ctx.fill()
 
-  $change.addEventListener 'keydown', ->
-      id = this.value
+  $canvas.addEventListener 'mousedown', (e) ->
+    e.preventDefault()
+    this.setAttribute 'data-down', true
 
-  $('message').addEventListener 'keypress', (e) ->
-    if e.which == 13
+  $canvas.addEventListener 'mouseup', (e) ->
+    e.preventDefault()
+    this.setAttribute 'data-down', false
+
+  $canvas.addEventListener 'mousemove', (e) ->
+    e.preventDefault()
+
+    if this.getAttribute('data-down') == 'true'
+
+      cPos = lib.findPos $canvas
+
       socket.emit 'data',
-        type: 'message',
-        value: this.value,
         id: id
+        type: 'draw',
+        value:
+          top: e.pageY - cPos.top,
+          left: e.pageX - cPos.left
+
+
+  changeCode id
+
+  $change.addEventListener 'keypress', (e) ->
+      if e.which == 13
+        changeCode this.value
