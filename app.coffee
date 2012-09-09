@@ -27,17 +27,20 @@ app.get "/", routes.index
 server = http.createServer(app)
 io = require("socket.io").listen(server)
 
-pairs = {}
-
 io.set 'log level', 1
 
 io.sockets.on 'connection', (socket) ->
 
-  socket.emit 'info',
-    id: socket.id
+  socket.on 'info', (data) ->
+    socket.get 'id', (err, id) ->
+      if id
+        socket.leave id
+
+      socket.set 'id', data.id
+      socket.join data.id
 
   socket.on 'data', (data) ->
-    io.sockets.emit 'data', data
+    io.sockets.in(data.id).emit 'data', data
 
 
 server.listen app.get("port"), ->

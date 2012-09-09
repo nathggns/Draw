@@ -1,3 +1,12 @@
+store = 
+  data: []
+  store: ->
+    if window.localStorage then localStorage else store.data
+  set: (name, val) ->
+    store.store()[name] = val
+  get: (name) ->
+    store.store()[name]
+
 lib =
   findPos: (ele) ->
     left = top = 0
@@ -14,74 +23,98 @@ lib =
 
 socket = io.connect 'http://localhost:3000'
 
-id = false
+id = store.get('id') or Math.floor Math.random() * 10000
 
+socket.emit 'info',
+  id: id
 
-socket.on 'info', (data) ->
-  id = data.id
+events =
+  canvas: false
+  mousedown: (e) ->
+    e.preventDefault()
+    store.set 'down', true
 
-dataHandlers = {}
+    events.draw e, this
 
-socket.on 'data', (data) ->
+  mousemove: (e) ->
+    if store.get('down') != 'true'
+      return true
+
+    events.draw e, this
+
+  mouseup: (e) ->
+    e.preventDefault()
+    store.set 'down', false
+
+  draw: (e) ->
+    emit
+      e:
+        pageX: e.pageX
+        pageY: e.pageY
+      , 'draw'
+
+dataHandlers =
+  'draw': (value) ->
+    e = value.e
+    pos = lib.findPos events.canvas
+    mpos = 
+      left: e.pageX - pos.left
+      top: e.pageY - pos.top
+
+    ctx = events.canvas.ctx
+
+    ctx.beginPath()
+    ctx.fillStyle = '#000000'
+    ctx.rect mpos.left, mpos.top, 10, 10
+    ctx.fill()
+
+socket.on 'data', (data) -> 
   if data.id != id
     return false
 
-  if typeof dataHandlers[data.type] != 'undefined'
-    dataHandlers[data.type] data.value, data
+  dataHandlers[data.type] data.value;
+
+  
 
 $ = (id) ->
   document.getElementById id
 
+
 document.addEventListener 'DOMContentLoaded', ->
-
-  if id == false
-    return setTimeout arguments.callee, 1
-
   changeCode = (code) ->
+    code = parseInt code
     id = code
-    $qr.setAttribute 'src', 'http://qr.kaywa.com/img.php?s=8&d=' + code
+    store.set 'id', id
+    socket.emit 'info', 
+      id: id
     $change.value = code;
 
-    ctx.clearRect $canvas.width, $canvas.height
-
-  $qr = $ 'qrcode'
   $change = $ 'change'
-  $canvas = document.createElement 'canvas';
-  $canvas.width = $canvas.height = 300;
+
+  for e in ['keydown', 'keyup', 'keypress']
+    $change.addEventListener e, () ->
+      changeCode this.value
+
+
+  $canvas = document.createElement 'canvas'
+  ctx = $canvas.ctx = $canvas.getContext('2d')
+  events.canvas = $canvas
+
+  for key, func of events
+    $canvas.addEventListener key, func
+
+  document.body.addEventListener 'mouseup', (e) ->
+    if store.get('down') == 'true'
+      events.mouseup.call $canvas, e
+
   document.body.appendChild $canvas
-  ctx = $canvas.getContext "2d"
-
-  dataHandlers['draw'] = (point) ->
-    ctx.beginPath()
-    ctx.fillStyle = '#000000'
-    ctx.rect point.left, point.top, 10, 10
-    ctx.fill()
-
-  $canvas.addEventListener 'mousedown', (e) ->
-    e.preventDefault()
-    this.setAttribute 'data-down', true
-
-  $canvas.addEventListener 'mouseup', (e) ->
-    e.preventDefault()
-    this.setAttribute 'data-down', false
-
-  $canvas.addEventListener 'mousemove', (e) ->
-    e.preventDefault()
-
-    if this.getAttribute('data-down') == 'true'
-
-      cPos = lib.findPos $canvas
-
-      socket.emit 'data',
-        id: id
-        type: 'draw',
-        value:
-          top: e.pageY - cPos.top,
-          left: e.pageX - cPos.left
-
 
   changeCode id
 
-  $change.addEventListener 'keypress', (e) ->
-      if e.which == 13
-        changeCode this.value
+  window.changeCode = changeCode
+
+  window.emit = (message, type = 'message') ->
+    socket.emit 'data', 
+      id: id,
+      type: type,
+      value: message
