@@ -32,9 +32,15 @@ events =
   canvas: false
   mousedown: (e) ->
     e.preventDefault()
+
+    emit {}, 'drawDown'
     store.set 'down', true
 
     events.draw e, this
+
+  mouseout: (e) ->
+    store.set 'down', false
+    emit {}, 'drawDown'
 
   mousemove: (e) ->
     if store.get('down') != 'true'
@@ -47,13 +53,25 @@ events =
     store.set 'down', false
 
   draw: (e) ->
-    emit
+    emit  
       e:
         pageX: e.pageX
         pageY: e.pageY
       , 'draw'
 
+
+
+datas = []
+
 dataHandlers =
+  'drawDown': (value) ->
+    store.set 'started', false
+  'opts': (value) ->
+    for key, val of value
+      events.canvas.ctx[key] = val
+  'join': (value) ->
+    for key, ev of value
+      dataHandlers[ev.type] ev.value
   'draw': (value) ->
     e = value.e
     pos = lib.findPos events.canvas
@@ -63,15 +81,26 @@ dataHandlers =
 
     ctx = events.canvas.ctx
 
-    ctx.beginPath()
-    ctx.fillStyle = '#000000'
-    ctx.rect mpos.left, mpos.top, 10, 10
-    ctx.fill()
+    if store.get('started') != 'true'
+      ctx.beginPath()
+      ctx.moveTo mpos.left, mpos.top
+      store.set 'started', true
+    else
+      ctx.lineTo mpos.left, mpos.top
+      ctx.stroke()
+
+socket.on 'join', (data) ->
+  socket.emit 'data', 
+    uniqId: data.id,
+    value: datas
+    type: 'join'
 
 socket.on 'data', (data) -> 
-  if data.id != id
+
+  if !data.uniqId and data.id != id
     return false
 
+  datas.push data
   dataHandlers[data.type] data.value;
 
   
@@ -82,6 +111,8 @@ $ = (id) ->
 
 document.addEventListener 'DOMContentLoaded', ->
   changeCode = (code) ->
+    datas = []
+    events.canvas.ctx.clearRect 0, 0, events.canvas.width, events.canvas.height
     code = parseInt code
     id = code
     store.set 'id', id

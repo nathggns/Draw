@@ -38,9 +38,14 @@ io.sockets.on 'connection', (socket) ->
 
       socket.set 'id', data.id
       socket.join data.id
+      io.sockets.clients(data.id)[0].emit 'join',
+        id: socket.id
 
   socket.on 'data', (data) ->
-    io.sockets.in(data.id).emit 'data', data
+
+    s = if data.uniqId then io.sockets.socket(data.uniqId) else io.sockets.in(data.id)
+
+    s.emit 'data', data
 
 
 server.listen app.get("port"), ->
